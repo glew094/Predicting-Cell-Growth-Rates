@@ -16,17 +16,15 @@ This repository contains a comprehensive machine learning pipeline designed to p
 
 ## Environment
 
-* Python 3.11.x
+* Python 3.14.7
 
-* matplotlib 3.8.x
+* matplotlib 3.11.0
 
-* numpy 1.26.x
+* numpy 2.5.2
 
-* pandas 2.2.x
+* pandas 3.0.5
 
-* scikit-learn 1.4.x
-
-*(Note: Exact patch versions can be found in the accompanying `environment.yaml` file).*
+* scikit-learn 1.9.0
 
 ## Code Design
 
