@@ -19,7 +19,7 @@ This repository contains a machine learning pipeline designed to predict the spe
 *   scikit-learn 1.9.0
 
 ## Code Design
-The predictive workflow is executed sequentially via the main.py script. The underlying mathematical and program logic is modularized into helper functions stored within the `src/functions.py` file. The execution of the pipeline flows through four major structural stages.
+The predictive workflow is executed sequentially via the `main.py` script. The underlying mathematical and program logic is modularized into helper functions stored within the `src/functions.py` file. The execution of the pipeline flows through four major structural stages.
 ### Initialization and Data Partitioning
 The execution of `main.py` begins by establishing the local environment. The `os` module checks for the existence of `tables/` and `figures/` directories, generating them if they are missing to prevent file-path errors during export. The script then uses `pandas` to read `dataset_cell_growth_4factor.csv`. The target variable (Specific Growth Rate) is isolated from the input features (Temperature, pH, Glucose, Lactate), and both structures are converted into NumPy arrays. 
 
