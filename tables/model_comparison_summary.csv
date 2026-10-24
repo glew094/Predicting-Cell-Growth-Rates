@@ -1,0 +1,3 @@
+Model,RMSE,R2_Score
+Polynomial Regression (Degree 2),0.157,0.3841
+"kNN (k=10, weights=distance)",0.1557,0.3941
