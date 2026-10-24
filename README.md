@@ -1,99 +1,91 @@
 # Predictive Bioprocess Modeling of Specific Growth Rate
 
-This repository contains a comprehensive machine learning pipeline designed to predict the specific growth rate of a cell culture based on historical fermentation data. By analyzing the complex, multidimensional interactions between temperature, pH, glucose concentration, and lactate concentration, this codebase solves the problem of inefficient, trial-and-error bioreactor tuning, allowing engineers to computationally optimize conditions for maximum cellular yield.
+This repository contains a machine learning pipeline designed to predict the specific growth rate of a cell culture using a four-factor bioprocess dataset. The code evaluates and compares polynomial regression against k-nearest neighbors (kNN) regression to determine which architecture best models the non-linear kinetics of cell growth based on temperature, pH, glucose, and lactate concentrations.
 
 ## Highlights
 
-* Engineered a robust, modular machine learning pipeline for predictive bioprocess modeling.
-* Prevented data leakage by embedding scaling transformations directly within Scikit-Learn pipelines.
-* Optimized algorithm hyperparameters utilizing rigorous k-fold Grid Search Cross-Validation.
-* Evaluated and contrasted parametric (Polynomial) and non-parametric (kNN) regression architectures.
-* Visualized high-dimensional feature interactions using isolated partial dependence plotting techniques.
+*   Engineered a Scikit-Learn pipeline to automate data scaling and regression modeling.
+*   Optimized model hyperparameters systematically using 5-fold grid search cross-validation.
+*   Evaluated algorithmic bias-variance tradeoffs by generating and analyzing validation curves.
+*   Visualized temperature dependence using partial dependence plots to isolate single-variable effects.
+*   Analyzed standardized polynomial feature weights to interpret underlying biological drivers.
 
 ## Environment
 
-* Python 3.14.7
-* matplotlib 3.11.0
-* numpy 2.5.2
-* pandas 3.0.5
-* scikit-learn 1.9.0
+*   Python 3.14.7
+*   matplotlib 3.11.0
+*   numpy 2.5.2
+*   pandas 3.0.5
+*   scikit-learn 1.9.0
 
 ## Code Design
+The predictive workflow is executed sequentially via the main.py script. The underlying mathematical and program logic is modularized into helper functions stored within the `src/functions.py` file. The execution of the pipeline flows through four major structural stages.
+### Initialization and Data Partitioning
+The execution of `main.py` begins by establishing the local environment. The `os` module checks for the existence of `tables/` and `figures/` directories, generating them if they are missing to prevent file-path errors during export. The script then uses `pandas` to read `dataset_cell_growth_4factor.csv`. The target variable (Specific Growth Rate) is isolated from the input features (Temperature, pH, Glucose, Lactate), and both structures are converted into NumPy arrays. 
 
-The predictive workflow is executed sequentially via the `main.py` script. To ensure code maintainability, readability, and adherence to professional software engineering principles, the underlying mathematical and programmatic logic is modularized into dedicated helper functions stored within the `src/functions.py` file. The execution of the pipeline flows through four major structural stages.
-
-### Initialization, Data Ingestion, and Partitioning
-The workflow begins by utilizing the `os` library to verify the existence of the `tables/` and `figures/` directories, dynamically creating them if they do not already exist. Following this, the program utilizes the `pandas` library to ingest the historical dataset from `dataset_cell_growth_4factor.csv`. The script programmatically isolates the specific growth rate into a dedicated target array and maps temperature, pH, glucose, and lactate into an independent feature matrix, immediately converting both structures into pure NumPy arrays. Once ingested, Scikit-Learn's `train_test_split` function is invoked to partition the arrays into a training set (containing 80% of the observations) and a testing set (containing the remaining 20%). A fixed `random_state` parameter is explicitly applied to guarantee that this exact random partition is reproducible across multiple executions. 
-
-This stage is necessary because checking for directories serves as a defensive programming practice that prevents the script from crashing during the final output generation. Furthermore, converting raw comma-separated values into isolated mathematical arrays is a strict requirement for machine learning algorithms. Crucially, partitioning the data before any transformations occur is a fundamental necessity to prevent data leakage, ensuring the model cannot memorize the validation metrics. Ultimately, this stage contributes to the overall workflow by establishing a secure, reproducible foundation. It guarantees that the local file system is prepared and that the raw bioprocess data is structured and segregated perfectly for the mathematical modeling that follows.
+Following ingestion, `train_test_split` partitions the data, setting aside 20% as an untouchable test set and retaining 80% for training. A fixed random state is applied to guarantee that the split is exactly reproducible across different runs. This partitioning step is necessary to prevent data leakage. If a model is evaluated on the same data used to train it, the resulting error metrics will only reflect the model's ability to memorize the dataset rather than its ability to generalize to new, unseen bioprocess batches. Setting the test set aside immediately ensures the final evaluation remains strictly objective.
 
 ### Pipeline Formulation and Preprocessing
-This stage constructs two encapsulated `make_pipeline` objects: one designated for Polynomial Regression and the other for k-Nearest Neighbors (kNN) regression. Both of these pipelines embed a `StandardScaler` as their initial operational step. This scaler applies a linear transformation to each individual feature, shifting the distribution such that it possesses a mean of exactly 0 and a standard deviation of 1. The standardized data is subsequently passed into either `PolynomialFeatures` and `LinearRegression`, or a `KNeighborsRegressor`. 
+Once the data is split, the script constructs two modeling pipelines using Scikit-Learn's `make_pipeline`. The first pipeline combines a `StandardScaler`, `PolynomialFeatures`, and `LinearRegression`. The second combines a `StandardScaler` with `KNeighborsRegressor`. 
 
-This stage is strictly necessary because the raw biological features operate on vastly different numerical scales. For example, bioreactor temperature is measured in tens of degrees, whereas critical metabolites like glucose or lactate might be measured in single-digit millimolar concentrations. Standardization is required to prevent variables with naturally larger numerical magnitudes from mathematically dominating the distance calculations and algorithmic weights. Additionally, utilizing a pipeline object is a highly secure method of encapsulating multiple data transformations into a single, cohesive unit. This significantly simplifies the workflow and strictly prevents the training data's scaling parameters from leaking into the test dataset during cross-validation. This stage contributes to the overall workflow by standardizing the mathematical playing field. By binding the preprocessing steps directly to the machine learning estimators, it creates a robust, automated sequence that ensures every piece of data fed into the models is scaled identically and safely.
+This preprocessing stage is necessary because the raw variables operate on completely different numerical scales. For example, temperature is measured in tens of degrees, while pH operates on a logarithmic scale. Distance-based algorithms like kNN rely heavily on Euclidean geometry; without scaling, features with naturally larger numbers will mathematically dominate the distance calculations, rendering smaller-scale variables functionally invisible to the model. 
 
-### Hyperparameter Optimization (GridSearchCV)
-In this stage, the formulated pipelines are fed into a `GridSearchCV` function alongside a predefined dictionary of potential hyperparameter settings. For the polynomial model, the grid searches polynomial degrees ranging from 1 through 4. For the kNN model, it evaluates $k$-values from 1 to 80 across both uniform and distance weighting schemes. The grid search utilizes 5-fold cross-validation, automatically dividing the 80% training data into 5 smaller, isolated sub-folds. It trains the algorithms on four of these folds and validates on the fifth, repeating this iterative process to calculate the average Root Mean Square Error (RMSE) for every possible hyperparameter combination. 
+Embedding the `StandardScaler` directly inside the pipeline rather than applying it to the raw dataset is critical for maintaining cross-validation integrity. It ensures that during the grid search, the scaler calculates its mean and standard deviation strictly on the active training fold, applying those exact parameters to the validation fold. This simulates a real-world scenario where the model processes genuinely new data without being influenced by the statistical distribution of the test set.
 
-This stage is necessary because while algorithms automatically learn internal parameters, hyperparameters are structural settings that must be manually defined by the engineer. The optimal value of a hyperparameter cannot be learned during standard training; we must systematically test these configurations to balance the bias-variance tradeoff. Cross-validation heavily reduces the evaluation metric's dependence on any single, randomized data split. This stage contributes to the overall workflow by acting as the primary tuning engine. It rigorously maps out the hyperparameter space to automatically locate the specific configuration that minimizes error, returning the mathematically optimized models ready for final testing.
+### Hyperparameter Optimization
+With the pipelines formulated, the script passes them into `GridSearchCV` objects to tune their structural settings. The polynomial grid search iterates through polynomial degrees 1 through 4. The kNN grid search evaluates values of $k$ (number of neighbors) from 1 to 80, testing both distance-based and uniform weighting algorithms. The search engine uses 5-fold cross-validation, dividing the 80% training data into five smaller subsets. It trains the model on four subsets and tests it on the fifth, rotating this process to calculate an average Root Mean Square Error (RMSE) for every single hyperparameter combination.
 
-### Final Evaluation and Metric Extraction
-The optimal Polynomial and kNN models identified by the grid search are finally exposed to the completely unseen 20% test data partition. The script utilizes these models to predict the target growth rates, compares these predictions to the true historical values, and calculates the final root mean squared error alongside the coefficient of determination ($R^2$). These final metrics are exported as a structured CSV summary table. Following this, the script extracts the linear coefficients from the winning Polynomial model and generates a sorted bar chart visualizing the top feature weights. 
+This optimization stage is necessary because the default algorithm settings are rarely suited to complex biological data. If the polynomial degree is too low, the model underfits and fails to capture the curvature of cell saturation points. If the degree is too high, it overfits the noise. Cross-validation systematically brute-forces the hyperparameter space to locate the optimal balance between bias and variance, ensuring the final selected model relies on actual biological trends rather than statistical anomalies.
 
-This stage is necessary because the evaluation metrics provide the rigorous, empirical proof required to determine which architectural approach best captured the underlying bioprocess dynamics. Extracting the polynomial weights is absolutely vital to achieve algorithmic interpretability. Because the data was standardized before being passed through the polynomial regression step, we can directly interpret these resulting weights to understand which specific environmental factors exert the strongest influence on the physical cell culture. This stage contributes to the overall workflow by translating abstract mathematical models into concrete, actionable business logic. It provides bioprocess operators with clear, quantified evidence of algorithmic performance, fulfilling the core objective of the predictive pipeline.
+### Final Evaluation and Output Generation
+In the final stage, the script extracts the best-performing estimators from both grid searches and exposes them to the 20% test set for the first time. The script calculates the final RMSE and $R^2$ scores, documenting the empirical performance of both the parametric and non-parametric approaches. 
+
+These results are exported as a CSV summary table. Next, the script extracts the linear coefficients from the winning polynomial model and generates a sorted horizontal bar chart of the top 10 feature weights. Finally, it dynamically renders and saves PNG figures for the data scaling comparisons, validation curves, and the temperature partial dependence plot. This stage is necessary because it translates the abstract matrix mathematics back into concrete, interpretable engineering deliverables. The exported metrics provide process engineers with the quantified evidence needed to justify implementing the predictive model in a live bioreactor monitoring system.
 
 ## Analysis
 
-### Justification of Model Architecture
+### Model Architecture Selection
+Based on the exported metrics and visualization outputs, the polynomial regression architecture (specifically Degree 2) outperformed the k-Nearest Neighbors approach for this multidimensional bioprocess dataset. 
 
-The selection of the final predictive architecture relies on balancing mathematical complexity with generalizable accuracy, heavily informed by the bias-variance tradeoff. Through the implementation of `GridSearchCV`, the polynomial regression model was rigorously evaluated across degrees 1 through 4.
+Polynomial regression is a parametric model, meaning it assumes the underlying data follows a specific mathematical structure. By applying a Degree 2 expansion, the model generates squared terms and interaction variables, allowing it to fit the parabolic curves characteristic of biological saturation kinetics. Cell cultures typically exhibit distinct optimal ranges for parameters like temperature and pH, where growth peaks and then rapidly declines as conditions become extreme. A second-degree polynomial perfectly maps this behavior without becoming overly complex.
+
+In contrast, kNN is a non-parametric model that calculates predictions by averaging the historical data points closest to the new input. While kNN can be highly effective in low-dimensional spaces, it struggles with this dataset due to the "curse of dimensionality." Because there are four distinct features (Temperature, pH, Glucose, Lactate), the geometric volume of the feature space is very large. As a result, the "nearest" neighbors are often physically far away, leading to jagged, less accurate predictions. The continuous mathematical equation provided by the polynomial model proved much better suited to interpolating the spaces between the training samples.
+
+### Validation Curves and Hyperparameter Tuning
+The exported validation curves provide clear evidence for the hyperparameter selections. 
 
 ![Polynomial Validation Curve](figures/poly_validation_curve.png)
 
-The empirical evidence generated in the polynomial validation curve clearly demonstrates that a Polynomial Degree of 2 or 3 represents the optimal structural architecture. At Degree 1, the model severely underfits the data, unable to capture the natural, nonlinear saturation kinetics characteristic of biological cell growth (resulting in high training and high test RMSE). However, pushing the architecture to Degree 4 or higher forces the model into classic overfitting; the training error rapidly approaches zero as the equation memorizes random noise, while the validation error spikes exponentially. Therefore, a low-degree polynomial (Degree 2 or 3) is justified as it beautifully captures the smooth, continuous physical nature of biological temperature and pH dependencies without succumbing to variance.
-
-### Comparative Analysis of Regression Algorithms
-
-When comparing the chosen Polynomial model against the non-parametric k-Nearest Neighbors (kNN) algorithm, the Polynomial architecture demonstrates distinct advantages for this specific multidimensional bioprocess.
+Looking at the polynomial validation curve, Degree 1 exhibits high error on both the training and validation lines, indicating severe underfitting. The linear equation simply cannot map the curved peak of cell growth. At Degree 2, both training and validation RMSE drop to their absolute minimum. However, at Degrees 3 and 4, the training error continues to artificially decrease while the validation error spikes upward. This divergence is the textbook definition of overfitting; the high-degree polynomials start memorizing the random measurement noise in the training set, destroying their ability to predict the specific growth rate on new validation folds.
 
 ![kNN Validation Curve](figures/knn_validation_curve.png)
 
-As evidenced in the kNN validation curve, the algorithm exhibits a steep error trajectory. At extremely low values of $k$ (e.g., $k=1$ or $2$), kNN drastically overfits the data, tracing individual, noisy data points rather than identifying global biological trends. While the kNN validation error does dip to a minimum as $k$ increases, it eventually climbs steadily as $k$ approaches 80 (underfitting), where the algorithm averages too many disparate conditions and simply predicts the global mean of the dataset.
+The kNN validation curve displays the inverse relationship. When $k$ is extremely small ($k=1$ or $2$), the model exhibits low training error but high validation error because it only looks at a single localized point, making it highly susceptible to outliers. As $k$ increases, the validation error drops smoothly to an optimal point. However, as $k$ approaches 80, the model begins to underfit. By averaging too many neighbors, it blurs the distinct biological conditions together, essentially predicting the global average of the entire dataset regardless of the specific input values. The grid search correctly identified the lowest point on the validation curve, but its overall RMSE remained higher than the Degree 2 polynomial model.
 
-Furthermore, kNN relies on calculating Euclidean distance across four dimensions (Temperature, pH, Glucose, Lactate). In high-dimensional spaces, distance-based metrics often degrade in predictive power—a phenomenon known as the "curse of dimensionality." Conversely, Polynomial Regression maps a continuous, mathematically defined surface over the data, which more accurately reflects the continuous nature of enzyme kinetics and cell metabolism, making it the mathematically superior alternative.
+### Feature Influence on Specific Growth Rate
+To understand the biological mechanics driving the predictions, we must analyze the standardized weights extracted from the polynomial model. Because the data was scaled to a mean of 0 and a standard deviation of 1 before fitting, the magnitude of these linear coefficients directly correlates to the feature's physical influence on the specific growth rate.
 
-### Advantages and Limitations of the Predictive Model
+![Model Weights](figures/model_weights.png)
 
-A primary advantage of the Polynomial Regression model is its high degree of interpretability. Because the features were processed via a `StandardScaler`, the resulting polynomial coefficients directly quantify the biological impact of each feature and their interacting terms. Engineers can instantly see exactly how strongly pH or Temperature drives the growth rate. Additionally, polynomial models are computationally inexpensive to deploy in real-time, executing basic algebraic equations rather than forcing a system to recalculate distances across thousands of historical training points (as required by kNN).
+Temperature and pH exhibit strong parabolic influences, represented by significant negative weights on their squared terms ($Temperature^2$ and $pH^2$). In biological terms, this negative parabolic shape confirms that both variables have a defined optimal setpoint. As you move away from that setpoint in either direction—making the environment too hot, too cold, too acidic, or too basic—the squared term dominates the equation and pulls the predicted specific growth rate down.
 
-However, a major limitation of this polynomial architecture is its extreme vulnerability to extrapolation. Polynomial equations tend to diverge violently toward positive or negative infinity when fed input values that exist outside the boundaries of the original training data. If a bioreactor experiences a temperature spike far beyond the maximum temperature seen in the dataset, the model may predict an impossible, infinitely negative growth rate rather than a simple zero. It is strictly interpolative.
+Glucose concentration serves as the primary carbon and energy source for the cell culture, presenting a positive linear correlation in the model weights. An increase in available substrate generally drives an increase in metabolic activity and cell division. 
 
-### Biological Influence of Process Parameters
+Conversely, lactate concentration exhibits a strong negative weight. Lactate is a metabolic byproduct of cellular respiration and glycolysis. As it accumulates in the bioreactor, it lowers the local pH and creates a toxic, inhibitory environment for the cells. The model correctly identified that high concentrations of lactate heavily suppress the specific growth rate.
 
-The extracted model weights and generated partial dependence plots provide deep insight into how the four target parameters govern the specific growth rate.
+### Optimal and Sub-Optimal Cell Culture Conditions
+Based on these feature relationships, we can define the specific environmental conditions that dictate bioreactor performance.
 
-![Feature Importance](figures/model_weights.png)
+**Conditions for High Specific Growth Rate:**
+To achieve maximum cell growth, the bioreactor must be strictly controlled near the mathematical apex of the temperature and pH parabolas. This optimal zone represents the conditions where cellular enzymes function at peak efficiency without risking thermal denaturation or structural degradation. Additionally, the process requires high initial concentrations of glucose to ensure substrate is not a limiting factor, combined with low concentrations of lactate. This prevents end-product inhibition and keeps the metabolic pathways flowing smoothly.
 
-* **Temperature:** This is typically the dominant driving force in cellular metabolism. As seen in the temperature dependence curve below, isolating this variable reveals a classic biological activity curve. As temperature rises, enzymatic activity and growth rate increase exponentially until an absolute thermal optimum is reached, after which the growth rate plummets rapidly due to sudden protein denaturation.
+**Conditions for Low Specific Growth Rate:**
+A low specific growth rate will occur if the temperature or pH deviates significantly from the optimal setpoints, leading to sluggish enzyme kinetics or cell death. Furthermore, nutrient starvation (low glucose) directly halts cell division. Even if glucose, pH, and temperature are optimal, an accumulation of high lactate concentrations late in the fermentation batch will inhibit the culture, drastically reducing the growth rate.
 
-![Temperature Dependence Curve](figures/temperature_dependence_curve.png)
+**Unreliable Model Predictions:**
+The model's predictions become highly unreliable when operators input conditions that fall outside the numerical range of the original training data (extrapolation). Polynomial models are particularly dangerous in this regard; because they follow mathematical trajectories that stretch toward infinity, inputting a temperature of 90°C might cause the model to predict a massive, impossible surge in growth, rather than recognizing that the cells would simply boil and die. The model is strictly empirical, meaning it only understands mathematical patterns within the data it was given. It does not understand the actual physical boundaries of biology.
 
-* **pH:** Cellular growth is highly sensitive to the concentration of hydrogen ions, which directly impact membrane potential and the structural integrity of transport proteins. The model identifies a tight, optimal pH band. Deviations to either highly acidic or highly basic conditions rapidly suppress the growth rate.
-* **Glucose Concentration:** As the primary carbon and energy source, glucose exhibits a strong positive correlation with growth rate at lower concentrations, adhering to standard Monod kinetics. However, the model correctly captures that excessive glucose does not yield infinite growth; the cells eventually become saturated, and the growth rate plateaus regardless of additional glucose supplementation.
-* **Lactate Concentration:** Lactate acts as a metabolic byproduct and a known cellular inhibitor. The polynomial weights accurately reflect a strong negative coefficient for lactate. As lactate accumulates in the media over the duration of a batch, it increases osmotic stress and lowers the local pH, cumulatively suppressing the specific growth rate.
+### Practical Applications and Limitations
+In a real-world chemical engineering context, this predictive model could be integrated into a bioreactor's supervisory control and data acquisition (SCADA) system. By feeding real-time sensor data (pH, temperature, and offline glucose/lactate samples) into the model, process engineers could monitor the instantaneous specific growth rate without waiting for manual cell counts. It could also be used for feed-forward process control; if the model predicts a drop in growth rate due to impending glucose depletion, the control system could automatically trigger a nutrient feed pump to maintain optimal saturation.
 
-### Optimal and Suboptimal Cell Culture Conditions
-
-Based on the synthesized model, cell culture conditions that result in a highly optimal specific growth rate require maintaining a delicate equilibrium. The highest growth rates are achieved when the bioreactor temperature is held precisely at the peak of the thermal optimum curve, accompanied by a strictly neutral or slightly optimized pH. Furthermore, glucose must be maintained at a sufficiently saturating level (to avoid starvation) while lactate concentrations must be kept as close to zero as physically possible to prevent metabolic inhibition.
-
-Conversely, suboptimal conditions leading to low or zero specific growth rates occur when this equilibrium is broken. Significant drops in temperature will drastically slow down enzymatic kinetics, stalling growth. High temperatures will denature enzymes, rapidly killing the culture. Furthermore, late-stage fermentation conditions characterized by deeply depleted glucose reserves and heavy, toxic lactate accumulation will yield the lowest predicted growth rates in the dataset.
-
-### Boundary Constraints and Model Reliability
-
-The predictions generated by this polynomial model are highly reliable only when interpolating *within* the multidimensional boundaries of the historical training data. The model's predictions become exceedingly unreliable—and potentially mathematically impossible—if queried with extreme conditions. For example, if the model is asked to predict the growth rate at 100°C or at a pH of 1.0, the polynomial equation may output a massive positive or negative number due to the unbounded nature of high-degree algebraic curves. The model possesses no inherent biological knowledge; it does not "know" that cells die at boiling temperatures unless the training data explicitly maps out that boundary.
-
-### Industrial Applications and Practical Implementation
-
-In a practical industrial setting, this predictive machine learning model functions as the core logic for a "Digital Twin" or a soft sensor. By feeding real-time sensor data (Temperature, pH) and offline metabolite samples (Glucose, Lactate) into the deployed model, process engineers can instantly estimate the current specific growth rate without waiting for tedious, delayed offline cell counts.
-
-Furthermore, this model can be integrated directly into automated Model Predictive Control (MPC) systems. If the model detects that the predicted growth rate is dropping due to rising lactate and falling glucose, it can automatically trigger a perfusion system to cycle in fresh media or initiate a precise, calculated glucose feed, ensuring the bioreactor operates at peak efficiency and maximum yield throughout the entire duration of the manufacturing campaign.
+The primary limitation of this pipeline is its purely data-driven nature. Unlike mechanistic models (such as Monod kinetics or Michaelis-Menten equations) which are built on fundamental stoichiometric and thermodynamic principles, this polynomial model is just a line of best fit. If the manufacturing facility switches to a slightly different cell line, or scales up the process from a 10-liter benchtop reactor to a 5,000-liter pilot plant, the fluid dynamics and mass transfer characteristics will change. Because this empirical model does not actually "know" the biology, the underlying polynomial coefficients would become immediately obsolete, requiring a completely new dataset to be generated, scaled, and re-tuned.
